@@ -1,20 +1,15 @@
 {
-  "name": "git-gui",
+  "$schema": "https://schema.tauri.app/tauri.conf.json",
+  "identifier": "com.git-gui.app",
   "version": "0.1.0",
-  "description": "A Git GUI application built with Tauri v2",
-  "authors": ["Developer"],
-  "license": "MIT",
-  "repository": "",
-  "edition": "2021",
-  "rust-version": "1.77.2",
-
+  
   "build": {
     "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
   },
-
+  
   "app": {
     "withGlobalTauri": true,
     "windows": [
@@ -30,7 +25,7 @@
       "csp": null
     }
   },
-
+  
   "bundle": {
     "active": true,
     "targets": "all",
