@@ -1,6 +1,7 @@
 use crate::error::{AppError, Result};
 use crate::state::AppState;
-use git2::{Repository, StatusOptions, DiffOptions, build::CheckoutBuilder};
+use git2::{Repository, StatusOptions, DiffOptions};
+use git2::build::CheckoutBuilder;
 use serde::Serialize;
 use std::path::PathBuf;
 use tauri::State;
@@ -286,7 +287,7 @@ pub async fn discard_changes(state: State<'_, AppState>, path: String) -> Result
     let relative_path = full_path.strip_prefix(repo_path).unwrap_or(&full_path);
     
     // Use checkout_head with pathspec to restore a single file
-    let mut checkout_opts = git2::CheckoutBuilder::new();
+    let mut checkout_opts = CheckoutBuilder::new();
     checkout_opts.force();
     checkout_opts.pathspec(relative_path);
     
