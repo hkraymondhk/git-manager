@@ -100,13 +100,13 @@ pub fn get_commit_log(state: tauri::State<AppState>, options: LogOptions) -> Res
         // 處理 search 過濾
         if let Some(search_term) = &options.search {
             let message = commit.message().unwrap_or("");
-            let author_name = commit.author().name().unwrap_or("");
-            let author_email = commit.author().email().unwrap_or("");
+            let author_name = commit.author().name().unwrap_or("").to_string();
+            let author_email = commit.author().email().unwrap_or("").to_string();
             
             let search_lower = search_term.to_lowercase();
             if !message.to_lowercase().contains(&search_lower)
-                && !author_name.contains(&search_lower)
-                && !author_email.contains(&search_lower)
+                && !author_name.to_lowercase().contains(&search_lower)
+                && !author_email.to_lowercase().contains(&search_lower)
             {
                 continue;
             }

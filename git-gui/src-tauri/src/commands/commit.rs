@@ -67,7 +67,7 @@ pub fn create_commit(state: tauri::State<AppState>, message: String, amend: bool
             Some(&signature),       // committer
             None,                   // message_encoding
             Some(&tree),            // tree
-            &message,               // message
+            Some(&message),         // message (需要是 Option<&str>)
         ).map_err(|e| format!("Failed to amend commit: {}", e))?;
 
         new_oid
