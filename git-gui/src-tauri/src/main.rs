@@ -9,9 +9,12 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .manage(state::AppState::default())
         .invoke_handler(tauri::generate_handler![
+            // Repository management commands
             commands::repo::open_repository,
-            commands::repo::get_current_repository,
-            commands::repo::close_repository,
+            commands::repo::init_repository,
+            commands::repo::clone_repository,
+            commands::repo::get_repo_info,
+            // Git operations commands
             commands::git_ops::get_commit_history,
             commands::git_ops::get_repo_status,
             commands::git_ops::stage_file,
