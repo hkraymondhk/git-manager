@@ -1,4 +1,4 @@
-use tauri::{State, EventTarget};
+use tauri::{State, EventTarget, Emitter};
 use crate::state::AppState;
 use crate::error::{AppError, Result};
 use std::path::PathBuf;
