@@ -14,6 +14,13 @@ fn main() {
             commands::repo::open_repository,
             commands::repo::get_current_repository,
             commands::repo::close_repository,
+            commands::git_ops::get_commit_history,
+            commands::git_ops::get_repo_status,
+            commands::git_ops::stage_file,
+            commands::git_ops::unstage_file,
+            commands::git_ops::create_commit,
+            commands::git_ops::get_diff,
+            commands::git_ops::discard_changes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

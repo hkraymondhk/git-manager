@@ -1,5 +1,9 @@
 import { RepoHeader } from './components/RepoHeader';
 import { RepoOpenDialog } from './components/RepoOpenDialog';
+import { ChangesPanel } from './components/ChangesPanel';
+import { DiffViewer } from './components/DiffViewer';
+import { CommitForm } from './components/CommitForm';
+import { CommitList } from './components/CommitList';
 import { useRepoStore } from './store/repoStore';
 
 function App() {
@@ -12,9 +16,22 @@ function App() {
         {!currentRepoPath ? (
           <RepoOpenDialog />
         ) : (
-          <div style={styles.placeholder}>
-            <p>Repository loaded: {currentRepoPath}</p>
-            <p style={styles.hint}>More Git features coming soon...</p>
+          <div style={styles.workspace}>
+            {/* Left panel: Changes */}
+            <div style={styles.leftPanel}>
+              <ChangesPanel />
+              <CommitForm />
+            </div>
+            
+            {/* Middle panel: Diff viewer */}
+            <div style={styles.middlePanel}>
+              <DiffViewer />
+            </div>
+            
+            {/* Right panel: Commit history */}
+            <div style={styles.rightPanel}>
+              <CommitList />
+            </div>
           </div>
         )}
       </main>
@@ -31,20 +48,29 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   main: {
     flex: 1,
-    overflow: 'auto',
+    overflow: 'hidden',
     backgroundColor: '#fff',
   },
-  placeholder: {
+  workspace: {
+    display: 'flex',
+    height: '100%',
+  },
+  leftPanel: {
+    width: '280px',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    color: '#57606a',
+    borderRight: '1px solid #d0d7de',
   },
-  hint: {
-    fontSize: '14px',
-    color: '#8b949e',
+  middlePanel: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    borderRight: '1px solid #d0d7de',
+  },
+  rightPanel: {
+    width: '350px',
+    display: 'flex',
+    flexDirection: 'column',
   },
 };
 
