@@ -4,7 +4,7 @@ pub mod commands;
 pub mod error;
 pub mod state;
 
-use tauri::{Manager, RunEvent};
+use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
@@ -15,10 +15,6 @@ fn main() {
             commands::repo::get_current_repository,
             commands::repo::close_repository,
         ])
-        .run(|_app_handle, event| {
-            if let RunEvent::Exit = event {
-                // Cleanup on exit
-            }
-        })
+        .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
