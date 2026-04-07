@@ -233,10 +233,10 @@ pub fn checkout_branch(state: State<AppState>, name: String) -> Result<()> {
     }
     
     // Find the branch
-    let mut branch = repo.find_branch(&name, BranchType::Local)?;
+    let branch = repo.find_branch(&name, BranchType::Local)?;
     
     // Get the commit object
-    let object = branch.get().peel_to_tree()?;
+    let _object = branch.get().peel_to_tree()?;
     
     // Checkout using checkout_head
     let mut checkout_opts = git2::build::CheckoutBuilder::new();
@@ -359,8 +359,9 @@ pub fn merge_branch(state: State<AppState>, name: String) -> Result<MergeResult>
         while let Some(conflict_result) = conflict_iter.next() {
             let conflict = conflict_result?;
             if let Some(entry) = conflict.our {
-                if let Some(path_bytes) = entry.path {
-                    if let Ok(path_str) = std::str::from_utf8(&path_bytes) {
+                let path_bytes: &[u8] = entry.path.as_ref().map(|p| p.as_slice()).unwrap_or(&[]);
+                if !path_bytes.is_empty() {
+                    if let Ok(path_str) = std::str::from_utf8(path_bytes) {
                         conflicts.push(path_str.to_string());
                     }
                 }
@@ -505,7 +506,7 @@ pub fn cherry_pick(state: State<AppState>, oid: String) -> Result<()> {
     }
     
     // If no conflicts, complete the cherry-pick
-    let index = repo.index()?;
+    let mut index = repo.index()?;
     let tree_id = index.write_tree()?;
     let tree = repo.find_tree(tree_id)?;
     
