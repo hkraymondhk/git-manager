@@ -359,8 +359,10 @@ pub fn merge_branch(state: State<AppState>, name: String) -> Result<MergeResult>
         while let Some(conflict_result) = conflict_iter.next() {
             let conflict = conflict_result?;
             if let Some(entry) = conflict.our {
-                if let Some(path) = entry.path {
-                    conflicts.push(path.to_string_lossy().to_string());
+                if let Some(path_bytes) = entry.path {
+                    if let Ok(path_str) = std::str::from_utf8(&path_bytes) {
+                        conflicts.push(path_str.to_string());
+                    }
                 }
             }
         }
@@ -492,7 +494,6 @@ pub fn cherry_pick(state: State<AppState>, oid: String) -> Result<()> {
     let mut checkout_opts = git2::build::CheckoutBuilder::new();
     checkout_opts.safe();
     opts.mainline(0);
-    opts.checkout_options(checkout_opts);
     
     repo.cherrypick(&commit, Some(&mut opts))?;
     
