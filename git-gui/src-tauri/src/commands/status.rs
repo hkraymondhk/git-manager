@@ -36,24 +36,22 @@ pub struct WorkingStatus {
 
 /// 將 git2 的 delta 狀態轉換為 StatusType
 fn delta_to_status_type(status: u32) -> StatusType {
-    use git2::StatusExt;
-    
     let status = git2::Status::from_bits_truncate(status);
 
-    if status.is_conflicted() {
+    if <git2::Status as git2::StatusExt>::is_conflicted(&status) {
         StatusType::Conflicted
-    } else if status.is_index_renamed() {
+    } else if <git2::Status as git2::StatusExt>::is_index_renamed(&status) {
         StatusType::Renamed
-    } else if status.is_index_typechange()
-        || status.is_wt_typechange()
+    } else if <git2::Status as git2::StatusExt>::is_index_typechange(&status)
+        || <git2::Status as git2::StatusExt>::is_wt_typechange(&status)
     {
         StatusType::TypeChange
-    } else if status.is_index_deleted()
-        || status.is_wt_deleted()
+    } else if <git2::Status as git2::StatusExt>::is_index_deleted(&status)
+        || <git2::Status as git2::StatusExt>::is_wt_deleted(&status)
     {
         StatusType::Deleted
-    } else if status.is_index_new()
-        || status.is_wt_new()
+    } else if <git2::Status as git2::StatusExt>::is_index_new(&status)
+        || <git2::Status as git2::StatusExt>::is_wt_new(&status)
     {
         StatusType::Added
     } else {
@@ -111,7 +109,7 @@ pub async fn get_working_status(state: State<'_, AppState>) -> Result<WorkingSta
             .map(|p| normalize_path(&p));
 
         // 檢查是否為未追蹤文件
-        if status.is_wt_new() {
+        if <git2::Status as git2::StatusExt>::is_wt_new(&status) {
             untracked.push(FileStatus {
                 path: path.clone(),
                 old_path: None,
@@ -147,7 +145,7 @@ pub async fn get_working_status(state: State<'_, AppState>) -> Result<WorkingSta
             });
         }
 
-        if has_workdir_changes || status.is_wt_modified() {
+        if has_workdir_changes || <git2::Status as git2::StatusExt>::is_wt_modified(&status) {
             unstaged.push(FileStatus {
                 path,
                 old_path,
