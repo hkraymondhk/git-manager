@@ -1,6 +1,6 @@
 use git2::{Repository, Signature};
 use std::path::PathBuf;
-use crate::AppState;
+use crate::state::AppState;
 use crate::commands::status::{FileStatus, StatusType};
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -30,8 +30,8 @@ pub struct CommitDetail {
 
 #[tauri::command]
 pub fn create_commit(state: tauri::State<AppState>, message: String, amend: bool) -> Result<CommitSummary, String> {
-    let repo_path = state.repo_path.lock().map_err(|e| e.to_string())?;
-    let repo_path_buf = PathBuf::from(repo_path.clone());
+    let repo_path = state.current_repo_path.lock().map_err(|_| "Failed to lock repo_path".to_string())?;
+    let repo_path_buf = PathBuf::from(repo_path.clone().ok_or_else(|| "No repository opened".to_string())?);
     
     let repo = Repository::open(&repo_path_buf)
         .map_err(|e| format!("Failed to open repository: {}", e))?;
@@ -60,27 +60,35 @@ pub fn create_commit(state: tauri::State<AppState>, message: String, amend: bool
         let parent_commit = repo.find_commit(head.target().unwrap())
             .map_err(|e| format!("Failed to find parent commit: {}", e))?;
 
-        // 使用 amend 方法
+        // 使用 amend 方法 - 注意參數順序：header, author, committer, message_encoding, update_ref, tree, message
         let new_oid = parent_commit.amend(
-            Some("HEAD"),
-            Some(&signature),
-            Some(&signature),
-            None, // 保持原訊息或稍後設定
-            Some(&tree),
-            Some(&message), // 新訊息
+            Some("HEAD"),           // update_ref
+            Some(&signature),       // author
+            Some(&signature),       // committer
+            None,                   // message_encoding
+            &message,               // message
+            Some(&tree),            // tree
         ).map_err(|e| format!("Failed to amend commit: {}", e))?;
 
         new_oid
     } else {
         // 普通提交
-        let mut parents = vec![];
+        let parents_vec: Vec<git2::Commit>;
+        let parents_refs: Vec<&git2::Commit>;
         
         if let Ok(head) = repo.head() {
             if let Some(target) = head.target() {
                 let parent = repo.find_commit(target)
                     .map_err(|e| format!("Failed to find parent: {}", e))?;
-                parents.push(&parent);
+                parents_vec = vec![parent];
+                parents_refs = parents_vec.iter().collect();
+            } else {
+                parents_vec = vec![];
+                parents_refs = vec![];
             }
+        } else {
+            parents_vec = vec![];
+            parents_refs = vec![];
         }
 
         repo.commit(
@@ -89,15 +97,10 @@ pub fn create_commit(state: tauri::State<AppState>, message: String, amend: bool
             &signature,
             &message,
             &tree,
-            &parents.iter().collect::<Vec<_>>(),
+            &parents_refs.as_slice(),
         ).map_err(|e| format!("Failed to create commit: {}", e))?
     };
 
-    // 如果有暫存的更改，提交後重置索引以反映新的 HEAD
-    // 這一步是可選的，取決於你想要的行為
-    // 這裡我們執行一個軟重置來確保工作目錄和索引與新提交一致
-    // 但通常不需要，因為我們已經寫入了樹
-    
     let commit = repo.find_commit(oid)
         .map_err(|e| format!("Failed to find new commit: {}", e))?;
 
@@ -118,10 +121,10 @@ fn get_signature(repo: &Repository) -> Result<Signature, String> {
         .map_err(|e| format!("Failed to get config: {}", e))?;
     
     let name = config.get_string("user.name")
-        .or_else(|_| Ok("Unknown".to_string()))?;
+        .unwrap_or_else(|_| "Unknown".to_string());
     
     let email = config.get_string("user.email")
-        .or_else(|_| Ok("unknown@example.com".to_string()))?;
+        .unwrap_or_else(|_| "unknown@example.com".to_string());
 
     Signature::now(&name, &email)
         .map_err(|e| format!("Failed to create signature: {}", e))
@@ -129,8 +132,8 @@ fn get_signature(repo: &Repository) -> Result<Signature, String> {
 
 #[tauri::command]
 pub fn get_commit_detail(state: tauri::State<AppState>, oid: String) -> Result<CommitDetail, String> {
-    let repo_path = state.repo_path.lock().map_err(|e| e.to_string())?;
-    let repo_path_buf = PathBuf::from(repo_path.clone());
+    let repo_path = state.current_repo_path.lock().map_err(|_| "Failed to lock repo_path".to_string())?;
+    let repo_path_buf = PathBuf::from(repo_path.clone().ok_or_else(|| "No repository opened".to_string())?);
     
     let repo = Repository::open(&repo_path_buf)
         .map_err(|e| format!("Failed to open repository: {}", e))?;
@@ -188,7 +191,7 @@ pub fn get_commit_detail(state: tauri::State<AppState>, oid: String) -> Result<C
                 let path = file.path().map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|| "unknown".to_string());
                 
-                let status_type = match file.status() {
+                let status_type = match delta.status() {
                     git2::Delta::Added => StatusType::Added,
                     git2::Delta::Deleted => StatusType::Deleted,
                     git2::Delta::Modified => StatusType::Modified,

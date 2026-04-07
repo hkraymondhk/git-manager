@@ -1,6 +1,6 @@
 use git2::{Repository, Revwalk, Sort};
 use std::path::PathBuf;
-use crate::AppState;
+use crate::state::AppState;
 use crate::commands::commit::{CommitSummary, AuthorInfo};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -34,8 +34,8 @@ pub struct Connection {
 
 #[tauri::command]
 pub fn get_commit_log(state: tauri::State<AppState>, options: LogOptions) -> Result<Vec<CommitSummary>, String> {
-    let repo_path = state.repo_path.lock().map_err(|e| e.to_string())?;
-    let repo_path_buf = PathBuf::from(repo_path.clone());
+    let repo_path = state.current_repo_path.lock().map_err(|_| "Failed to lock repo_path".to_string())?;
+    let repo_path_buf = PathBuf::from(repo_path.clone().ok_or_else(|| "No repository opened".to_string())?);
     
     let repo = Repository::open(&repo_path_buf)
         .map_err(|e| format!("Failed to open repository: {}", e))?;
@@ -77,11 +77,9 @@ pub fn get_commit_log(state: tauri::State<AppState>, options: LogOptions) -> Res
         .map_err(|e| format!("Failed to set sorting: {}", e))?;
 
     // 如果有 path_filter，需要特殊處理
-    let mut simplify = false;
     if options.path_filter.is_some() {
         revwalk.simplify_first_parent()
             .map_err(|e| format!("Failed to simplify: {}", e))?;
-        simplify = true;
     }
 
     let mut results = Vec::new();
@@ -136,8 +134,8 @@ pub fn get_commit_log(state: tauri::State<AppState>, options: LogOptions) -> Res
 
 #[tauri::command]
 pub fn get_graph_data(state: tauri::State<AppState>, limit: usize) -> Result<GraphData, String> {
-    let repo_path = state.repo_path.lock().map_err(|e| e.to_string())?;
-    let repo_path_buf = PathBuf::from(repo_path.clone());
+    let repo_path = state.current_repo_path.lock().map_err(|_| "Failed to lock repo_path".to_string())?;
+    let repo_path_buf = PathBuf::from(repo_path.clone().ok_or_else(|| "No repository opened".to_string())?);
     
     let repo = Repository::open(&repo_path_buf)
         .map_err(|e| format!("Failed to open repository: {}", e))?;
@@ -148,15 +146,17 @@ pub fn get_graph_data(state: tauri::State<AppState>, limit: usize) -> Result<Gra
     for branch in repo.branches(Some(git2::BranchType::Local))
         .map_err(|e| format!("Failed to list branches: {}", e))? 
     {
-        let (branch_ref, branch_type) = branch.map_err(|e| format!("Failed to get branch: {}", e))?;
+        let (branch_ref, _branch_type) = branch.map_err(|e| format!("Failed to get branch: {}", e))?;
         let branch_name = branch_ref.name()
-            .and_then(|n| n.map(|s| s.to_string()))
-            .unwrap_or_else(|| "unknown".to_string());
+            .and_then(|n| Ok(n.map(|s| s.to_string())))
+            .unwrap_or_else(|_| Ok("unknown".to_string()))?
+            .trim_start_matches("refs/heads/")
+            .to_string();
         
-        if let Some(target) = branch_ref.target() {
+        if let Some(target) = branch_ref.get().target() {
             branches_map.entry(target.to_string())
                 .or_insert_with(Vec::new)
-                .push(branch_name.trim_start_matches("refs/heads/").to_string());
+                .push(branch_name);
         }
     }
 
@@ -169,7 +169,7 @@ pub fn get_graph_data(state: tauri::State<AppState>, limit: usize) -> Result<Gra
         .map_err(|e| format!("Failed to list branches: {}", e))? 
     {
         let (branch_ref, _) = branch.map_err(|e| format!("Failed to get branch: {}", e))?;
-        if let Some(target) = branch_ref.target() {
+        if let Some(target) = branch_ref.get().target() {
             let _ = revwalk.push(target);
         }
     }
@@ -189,9 +189,7 @@ pub fn get_graph_data(state: tauri::State<AppState>, limit: usize) -> Result<Gra
 
     // 收集提交並計算 lane
     let mut commits_data: Vec<(git2::Oid, CommitSummary, Vec<String>)> = Vec::new();
-    let mut seen_lanes: std::collections::HashMap<usize, git2::Oid> = std::collections::HashMap::new();
     let mut oid_to_lane: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    let mut active_lanes: Vec<usize> = Vec::new();
     let mut next_lane = 0;
 
     for oid_result in revwalk.take(limit) {
