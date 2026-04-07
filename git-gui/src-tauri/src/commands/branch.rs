@@ -324,7 +324,7 @@ pub fn merge_branch(state: State<AppState>, name: String) -> Result<MergeResult>
     let branch_commit = branch.get().peel_to_commit()?;
     
     // Get the current HEAD commit
-    let head = repo.head()?;
+    let mut head = repo.head()?;
     let head_commit = head.peel_to_commit()?;
     
     // Check if already up to date
@@ -375,7 +375,7 @@ pub fn merge_branch(state: State<AppState>, name: String) -> Result<MergeResult>
     }
     
     // No conflicts, complete the merge
-    let index = repo.index()?;
+    let mut index = repo.index()?;
     let tree_id = index.write_tree()?;
     let tree = repo.find_tree(tree_id)?;
     
@@ -387,7 +387,7 @@ pub fn merge_branch(state: State<AppState>, name: String) -> Result<MergeResult>
         .collect();
     let parents_refs: Vec<&git2::Commit> = parents.iter().collect();
     
-    let commit_id = repo.commit(
+    let _commit_id = repo.commit(
         Some("HEAD"),
         &signature,
         &signature,
