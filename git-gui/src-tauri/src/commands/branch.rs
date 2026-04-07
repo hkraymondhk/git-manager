@@ -3,7 +3,7 @@ use crate::state::AppState;
 use crate::error::{AppError, Result};
 use std::path::PathBuf;
 use serde::{Serialize, Deserialize};
-use git2::{Repository, BranchType};
+use git2::{Repository, BranchType, ObjectType};
 
 /// Commit summary information (re-exported from repo module concept)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -238,11 +238,11 @@ pub fn checkout_branch(state: State<AppState>, name: String) -> Result<()> {
     // Get the commit object
     let object = branch.get().peel_to_tree()?;
     
-    // Checkout
-    let mut checkout_opts = git2::CheckoutOptions::new();
+    // Checkout using checkout_head
+    let mut checkout_opts = git2::build::CheckoutBuilder::new();
     checkout_opts.safe();
     
-    repo.checkout_tree(&object, Some(&mut checkout_opts))?;
+    repo.checkout_head(Some(&mut checkout_opts))?;
     
     // Set HEAD to the branch
     repo.set_head(branch.get().name().unwrap_or("refs/heads/master"))?;
@@ -339,10 +339,10 @@ pub fn merge_branch(state: State<AppState>, name: String) -> Result<MergeResult>
         // Fast-forward is possible
         let tree = branch_commit.tree()?;
         
-        let mut checkout_opts = git2::CheckoutOptions::new();
+        let mut checkout_opts = git2::build::CheckoutBuilder::new();
         checkout_opts.safe();
         
-        repo.checkout_tree(&tree, Some(&mut checkout_opts))?;
+        repo.checkout_tree(&tree.as_object(), Some(&mut checkout_opts))?;
         head.set_target(branch_commit.id(), "Fast-forward merge")?;
         
         return Ok(MergeResult::FastForward);
@@ -355,7 +355,7 @@ pub fn merge_branch(state: State<AppState>, name: String) -> Result<MergeResult>
     
     // Check for conflicts
     let mut conflicts = Vec::new();
-    if let Ok(mut conflict_iter) = repo.conflicts() {
+    if let Ok(mut conflict_iter) = repo.index()?.conflicts() {
         while let Some(conflict_result) = conflict_iter.next() {
             let conflict = conflict_result?;
             if let Some(entry) = conflict.our {
@@ -379,9 +379,10 @@ pub fn merge_branch(state: State<AppState>, name: String) -> Result<MergeResult>
     // Create merge commit
     let signature = repo.signature()?;
     let parent_ids = vec![head_commit.id(), branch_commit.id()];
-    let parents: Vec<&git2::Commit> = parent_ids.iter()
+    let parents: Vec<git2::Commit> = parent_ids.iter()
         .filter_map(|id| repo.find_commit(*id).ok())
         .collect();
+    let parents_refs: Vec<&git2::Commit> = parents.iter().collect();
     
     let commit_id = repo.commit(
         Some("HEAD"),
@@ -389,7 +390,7 @@ pub fn merge_branch(state: State<AppState>, name: String) -> Result<MergeResult>
         &signature,
         &format!("Merge branch '{}'", name),
         &tree,
-        &parents,
+        &parents_refs,
     )?;
     
     // Clean up merge state
@@ -423,14 +424,18 @@ pub fn rebase_branch(state: State<AppState>, onto: String) -> Result<RebaseResul
     
     // Initialize rebase
     let mut rebase_opts = git2::RebaseOptions::new();
-    let mut checkout_opts = git2::CheckoutOptions::new();
+    let mut checkout_opts = git2::build::CheckoutBuilder::new();
     checkout_opts.safe();
     rebase_opts.checkout_options(checkout_opts);
     
+    let upstream_ann = repo.find_annotated_commit(upstream.id())?;
+    let base_ann = repo.find_annotated_commit(base_commit.id())?;
+    let onto_ann = repo.find_annotated_commit(onto_commit.id())?;
+    
     let mut rebase = repo.rebase(
-        Some(&upstream),
-        Some(&base_commit),
-        Some(&onto_commit),
+        Some(&upstream_ann),
+        Some(&base_ann),
+        Some(&onto_ann),
         Some(&mut rebase_opts),
     )?;
     
@@ -483,8 +488,8 @@ pub fn cherry_pick(state: State<AppState>, oid: String) -> Result<()> {
     let commit = repo.find_commit(commit_oid)?;
     
     // Perform cherry-pick
-    let mut opts = git2::CherryPickOptions::new();
-    let mut checkout_opts = git2::CheckoutOptions::new();
+    let mut opts = git2::CherrypickOptions::new();
+    let mut checkout_opts = git2::build::CheckoutBuilder::new();
     checkout_opts.safe();
     opts.mainline(0);
     opts.checkout_options(checkout_opts);
@@ -528,7 +533,7 @@ pub fn get_tags(state: State<AppState>) -> Result<Vec<TagInfo>> {
     
     let mut tags = Vec::new();
     
-    let tag_names = repo.tag_names()?;
+    let tag_names = repo.tag_names(None)?;
     
     for tag_name_opt in tag_names.iter() {
         if let Some(tag_name) = tag_name_opt {
@@ -539,10 +544,10 @@ pub fn get_tags(state: State<AppState>) -> Result<Vec<TagInfo>> {
                 // Annotated tag
                 let target = tag.target()?;
                 let tag_type = match target.kind() {
-                    Some("commit") => "commit".to_string(),
-                    Some("blob") => "blob".to_string(),
-                    Some("tree") => "tree".to_string(),
-                    Some("tag") => "tag".to_string(),
+                    Some(ObjectType::Commit) => "commit".to_string(),
+                    Some(ObjectType::Blob) => "blob".to_string(),
+                    Some(ObjectType::Tree) => "tree".to_string(),
+                    Some(ObjectType::Tag) => "tag".to_string(),
                     _ => "unknown".to_string(),
                 };
                 
@@ -560,9 +565,9 @@ pub fn get_tags(state: State<AppState>) -> Result<Vec<TagInfo>> {
                 // Lightweight tag (just points to an object)
                 let obj = repo.revparse_single(&format!("refs/tags/{}", tag_name))?;
                 let obj_type = match obj.kind() {
-                    Some("commit") => "commit".to_string(),
-                    Some("blob") => "blob".to_string(),
-                    Some("tree") => "tree".to_string(),
+                    Some(ObjectType::Commit) => "commit".to_string(),
+                    Some(ObjectType::Blob) => "blob".to_string(),
+                    Some(ObjectType::Tree) => "tree".to_string(),
                     _ => "unknown".to_string(),
                 };
                 
