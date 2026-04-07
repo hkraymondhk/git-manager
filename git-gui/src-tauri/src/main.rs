@@ -22,6 +22,13 @@ fn main() {
             commands::git_ops::create_commit,
             commands::git_ops::get_diff,
             commands::git_ops::discard_changes,
+            // Working status commands
+            commands::status::get_working_status,
+            commands::status::stage_file,
+            commands::status::unstage_file,
+            commands::status::stage_all,
+            commands::status::discard_changes,
+            commands::status::setup_file_watcher,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
