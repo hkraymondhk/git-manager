@@ -36,24 +36,22 @@ pub struct WorkingStatus {
 
 /// 將 git2 的 delta 狀態轉換為 StatusType
 fn delta_to_status_type(status: u32) -> StatusType {
-    use git2::StatusFlags;
+    let flags = git2::StatusFlags::from_bits_truncate(status);
 
-    let flags = StatusFlags::from_bits_truncate(status);
-
-    if flags.contains(StatusFlags::CONFLICTED) {
+    if flags.contains(git2::StatusFlags::CONFLICTED) {
         StatusType::Conflicted
-    } else if flags.contains(StatusFlags::INDEX_RENAMED) {
+    } else if flags.contains(git2::StatusFlags::INDEX_RENAMED) {
         StatusType::Renamed
-    } else if flags.contains(StatusFlags::INDEX_TYPECHANGE)
-        || flags.contains(StatusFlags::WT_TYPECHANGE)
+    } else if flags.contains(git2::StatusFlags::INDEX_TYPECHANGE)
+        || flags.contains(git2::StatusFlags::WT_TYPECHANGE)
     {
         StatusType::TypeChange
-    } else if flags.contains(StatusFlags::INDEX_DELETED)
-        || flags.contains(StatusFlags::WT_DELETED)
+    } else if flags.contains(git2::StatusFlags::INDEX_DELETED)
+        || flags.contains(git2::StatusFlags::WT_DELETED)
     {
         StatusType::Deleted
-    } else if flags.contains(StatusFlags::INDEX_NEW)
-        || flags.contains(StatusFlags::WT_NEW)
+    } else if flags.contains(git2::StatusFlags::INDEX_NEW)
+        || flags.contains(git2::StatusFlags::WT_NEW)
     {
         StatusType::Added
     } else {
@@ -70,7 +68,7 @@ fn normalize_path(path: &str) -> String {
 #[tauri::command]
 pub async fn get_working_status(state: State<'_, AppState>) -> Result<WorkingStatus, AppError> {
     let repo_path = state
-        .repo_path
+        .current_repo_path
         .lock()
         .map_err(|_| AppError::StateLockError("Failed to lock repo_path".to_string()))?
         .clone()
@@ -110,10 +108,8 @@ pub async fn get_working_status(state: State<'_, AppState>) -> Result<WorkingSta
             .map(|p| p.to_string_lossy().to_string())
             .map(|p| normalize_path(&p));
 
-        use git2::StatusFlags;
-
         // 檢查是否為未追蹤文件
-        if status.contains(StatusFlags::WT_NEW) {
+        if status.contains(git2::StatusFlags::WT_NEW) {
             untracked.push(FileStatus {
                 path: path.clone(),
                 old_path: None,
@@ -124,19 +120,19 @@ pub async fn get_working_status(state: State<'_, AppState>) -> Result<WorkingSta
 
         // 檢查是否在 index 中（已暫存）
         let is_staged = status.intersects(
-            StatusFlags::INDEX_NEW
-                | StatusFlags::INDEX_MODIFIED
-                | StatusFlags::INDEX_DELETED
-                | StatusFlags::INDEX_RENAMED
-                | StatusFlags::INDEX_TYPECHANGE,
+            git2::StatusFlags::INDEX_NEW
+                | git2::StatusFlags::INDEX_MODIFIED
+                | git2::StatusFlags::INDEX_DELETED
+                | git2::StatusFlags::INDEX_RENAMED
+                | git2::StatusFlags::INDEX_TYPECHANGE,
         );
 
         // 檢查是否有工作區改動
         let has_workdir_changes = status.intersects(
-            StatusFlags::WT_MODIFIED
-                | StatusFlags::WT_DELETED
-                | StatusFlags::WT_RENAMED
-                | StatusFlags::WT_TYPECHANGE,
+            git2::StatusFlags::WT_MODIFIED
+                | git2::StatusFlags::WT_DELETED
+                | git2::StatusFlags::WT_RENAMED
+                | git2::StatusFlags::WT_TYPECHANGE,
         );
 
         let status_type = delta_to_status_type(status.bits());
@@ -149,7 +145,7 @@ pub async fn get_working_status(state: State<'_, AppState>) -> Result<WorkingSta
             });
         }
 
-        if has_workdir_changes || status.contains(StatusFlags::WT_MODIFIED) {
+        if has_workdir_changes || status.contains(git2::StatusFlags::WT_MODIFIED) {
             unstaged.push(FileStatus {
                 path,
                 old_path,
@@ -169,7 +165,7 @@ pub async fn get_working_status(state: State<'_, AppState>) -> Result<WorkingSta
 #[tauri::command]
 pub async fn stage_file(path: String, state: State<'_, AppState>) -> Result<(), AppError> {
     let repo_path = state
-        .repo_path
+        .current_repo_path
         .lock()
         .map_err(|_| AppError::StateLockError("Failed to lock repo_path".to_string()))?
         .clone()
@@ -192,7 +188,7 @@ pub async fn stage_file(path: String, state: State<'_, AppState>) -> Result<(), 
 #[tauri::command]
 pub async fn unstage_file(path: String, state: State<'_, AppState>) -> Result<(), AppError> {
     let repo_path = state
-        .repo_path
+        .current_repo_path
         .lock()
         .map_err(|_| AppError::StateLockError("Failed to lock repo_path".to_string()))?
         .clone()
@@ -206,7 +202,7 @@ pub async fn unstage_file(path: String, state: State<'_, AppState>) -> Result<()
 
     // 使用 reset 將文件從 index 移回工作區
     let (object, _) = repo.revparse_ext("HEAD")?;
-    repo.reset_default(&object, Some(&[repo_relative_path]))?;
+    repo.reset_default(Some(&object), Some(&[repo_relative_path.as_os_str().to_str().unwrap()]))?;
 
     Ok(())
 }
@@ -215,7 +211,7 @@ pub async fn unstage_file(path: String, state: State<'_, AppState>) -> Result<()
 #[tauri::command]
 pub async fn stage_all(state: State<'_, AppState>) -> Result<(), AppError> {
     let repo_path = state
-        .repo_path
+        .current_repo_path
         .lock()
         .map_err(|_| AppError::StateLockError("Failed to lock repo_path".to_string()))?
         .clone()
@@ -235,7 +231,7 @@ pub async fn stage_all(state: State<'_, AppState>) -> Result<(), AppError> {
 #[tauri::command]
 pub async fn discard_changes(path: String, state: State<'_, AppState>) -> Result<(), AppError> {
     let repo_path = state
-        .repo_path
+        .current_repo_path
         .lock()
         .map_err(|_| AppError::StateLockError("Failed to lock repo_path".to_string()))?
         .clone()
@@ -274,7 +270,7 @@ pub async fn setup_file_watcher(
     use std::time::Duration;
 
     let repo_path = state
-        .repo_path
+        .current_repo_path
         .lock()
         .map_err(|_| AppError::StateLockError("Failed to lock repo_path".to_string()))?
         .clone()

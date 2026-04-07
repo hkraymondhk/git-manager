@@ -17,6 +17,15 @@ pub enum AppError {
 
     #[error("Serialization error: {0}")]
     Serialization(String),
+
+    #[error("State lock error: {0}")]
+    StateLockError(String),
+
+    #[error("Not initialized: {0}")]
+    NotInitialized(String),
+
+    #[error("Notify error: {0}")]
+    NotifyError(#[from] notify::Error),
 }
 
 impl Serialize for AppError {
