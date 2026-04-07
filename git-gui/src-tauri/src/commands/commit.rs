@@ -73,21 +73,23 @@ pub fn create_commit(state: tauri::State<AppState>, message: String, amend: bool
         new_oid
     } else {
         // 普通提交
-        let parents: Vec<git2::Commit> = match repo.head() {
-            Ok(head) => {
-                if let Some(target) = head.target() {
-                    match repo.find_commit(target) {
-                        Ok(parent) => vec![parent],
-                        Err(_) => vec![],
-                    }
-                } else {
-                    vec![]
-                }
+        let parents_vec: Vec<git2::Commit>;
+        let parents_refs: Vec<&git2::Commit>;
+        
+        if let Ok(head) = repo.head() {
+            if let Some(target) = head.target() {
+                let parent = repo.find_commit(target)
+                    .map_err(|e| format!("Failed to find parent: {}", e))?;
+                parents_vec = vec![parent];
+                parents_refs = parents_vec.iter().collect();
+            } else {
+                parents_vec = vec![];
+                parents_refs = vec![];
             }
-            Err(_) => vec![],
-        };
-
-        let parents_refs: Vec<&git2::Commit> = parents.iter().collect();
+        } else {
+            parents_vec = vec![];
+            parents_refs = vec![];
+        }
 
         repo.commit(
             Some("HEAD"),
