@@ -62,12 +62,12 @@ pub fn create_commit(state: tauri::State<AppState>, message: String, amend: bool
 
         // 使用 amend 方法 - 正確參數順序：update_ref, author, committer, message_encoding, tree, message
         let new_oid = parent_commit.amend(
-            Some("HEAD"),           // update_ref
-            Some(&signature),       // author
-            Some(&signature),       // committer
-            None,                   // message_encoding (Option<&str>)
-            Some(&tree),            // tree (Option<&Tree>)
-            Some(message.as_str()), // message (Option<&str>)
+            Some("HEAD"),           // update_ref: Option<&str>
+            Some(&signature),       // author: Option<&Signature>
+            Some(&signature),       // committer: Option<&Signature>
+            None,                   // message_encoding: Option<&str>
+            Some(message.as_str()), // message: Option<&str> (先傳 message)
+            Some(&tree),            // tree: Option<&Tree<'_>> (再傳 tree)
         ).map_err(|e| format!("Failed to amend commit: {}", e))?;
 
         new_oid
