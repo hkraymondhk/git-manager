@@ -4,8 +4,10 @@ import { invoke } from '@tauri-apps/api/core';
 export interface CommitInfo {
   oid: string;
   message: string;
-  author: string;
-  email: string;
+  author: {
+    name: string;
+    email: string;
+  };
   timestamp: number;
 }
 

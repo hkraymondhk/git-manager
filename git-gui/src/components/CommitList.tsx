@@ -35,7 +35,7 @@ export function CommitList() {
               </div>
               <div style={styles.message}>{commit.message}</div>
               <div style={styles.author}>
-                {commit.author} {commit.email ? `<${commit.email}>` : ''}
+                {commit.author.name} {commit.author.email ? `<${commit.author.email}>` : ''}
               </div>
             </div>
           ))}
