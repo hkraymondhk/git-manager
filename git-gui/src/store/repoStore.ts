@@ -88,9 +88,12 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   
   loadCommitHistory: async () => {
     try {
-      const commits = await invoke<CommitInfo[]>('get_commit_history');
+      const commits = await invoke<CommitInfo[]>('get_commit_log', { 
+        options: { limit: 200, offset: 0 }
+      });
       set({ commits });
     } catch (err) {
+      console.error('Failed to load commit history:', err);
       set({ error: String(err) });
     }
   },

@@ -7,10 +7,14 @@ use crate::commands::commit::{CommitSummary, AuthorInfo};
 pub struct LogOptions {
     pub branch: Option<String>,   // None = HEAD
     pub path_filter: Option<String>, // 文件歷史過濾
+    #[serde(default = "default_limit")]
     pub limit: usize,             // 默認 200
+    #[serde(default)]
     pub offset: usize,            // 分頁
     pub search: Option<String>,   // 搜索 message/author
 }
+
+fn default_limit() -> usize { 200 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct GraphData {
