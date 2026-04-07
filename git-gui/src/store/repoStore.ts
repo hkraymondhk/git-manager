@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 
 export interface CommitInfo {
-  id: string;
+  oid: string;
   message: string;
   author: string;
   email: string;

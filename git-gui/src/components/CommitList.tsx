@@ -12,7 +12,7 @@ export function CommitList() {
     }
   };
 
-  const getShortHash = (hash: string) => hash.substring(0, 7);
+  const getShortHash = (hash: string | undefined) => hash?.substring(0, 7) || 'unknown';
 
   return (
     <div style={styles.container}>
@@ -28,9 +28,9 @@ export function CommitList() {
       ) : (
         <div style={styles.list}>
           {commits.map((commit) => (
-            <div key={commit.id} style={styles.commit}>
+            <div key={commit.oid} style={styles.commit}>
               <div style={styles.commitHeader}>
-                <span style={styles.hash}>{getShortHash(commit.id)}</span>
+                <span style={styles.hash}>{getShortHash(commit.oid)}</span>
                 <span style={styles.time}>{formatDate(commit.timestamp)}</span>
               </div>
               <div style={styles.message}>{commit.message}</div>
