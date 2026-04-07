@@ -286,10 +286,10 @@ pub async fn discard_changes(state: State<'_, AppState>, path: String) -> Result
     let full_path = PathBuf::from(&path);
     let relative_path = full_path.strip_prefix(repo_path).unwrap_or(&full_path);
     
-    // Use checkout_head with pathspec to restore a single file
+    // Use checkout_head with path to restore a single file
     let mut checkout_opts = CheckoutBuilder::new();
     checkout_opts.force();
-    checkout_opts.pathspec(relative_path);
+    checkout_opts.path(relative_path);
     
     repo.checkout_head(Some(&mut checkout_opts))?;
     Ok(())
