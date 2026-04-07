@@ -68,7 +68,7 @@ pub fn open_repository(path: String, state: State<AppState>) -> Result<RepoInfo>
 
 /// Initialize a new repository
 #[tauri::command]
-pub fn init_repository(path: String) -> Result<RepoInfo> {
+pub fn init_repository(path: String, state: State<AppState>) -> Result<RepoInfo> {
     let repo_path = PathBuf::from(&path);
     
     // Create parent directories if they don't exist
@@ -76,7 +76,11 @@ pub fn init_repository(path: String) -> Result<RepoInfo> {
         std::fs::create_dir_all(parent)?;
     }
     
-    let repo = git2::Repository::init(&repo_path)?;
+    git2::Repository::init(&repo_path)?;
+    
+    // Save to AppState
+    let mut current_repo = state.current_repo_path.lock().unwrap();
+    *current_repo = Some(path.clone());
     
     let repo_info = RepoInfo {
         path: path.clone(),

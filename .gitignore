@@ -1,40 +1,53 @@
+```
 # Dependencies
 node_modules/
-target/
+vendor/
 
 # Build outputs
 dist/
 build/
-out/
+target/
+release/
+debug/
 
-# Tauri
+# Rust/Cargo specific
+Cargo.lock
+*.rs.bk
+**/deps/
+**/examples/
+**/incremental/
+
+# Tauri specific
 src-tauri/target/
+src-tauri/Cargo.lock
 
-# Environment
-.env
-.env.local
-.env.*.local
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS
+# OS generated files
 .DS_Store
 Thumbs.db
 
 # Logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# Testing
+# Environment variables
+.env
+.env.local
+.env.*
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage reports
 coverage/
+htmlcov/
+.coverage
 
-# Temporary files
-tmp/
-temp/
+# Python cache (if any Python files exist in the project)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+```
