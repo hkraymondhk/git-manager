@@ -1,6 +1,6 @@
 use crate::error::{AppError, Result};
 use crate::state::AppState;
-use git2::{Repository, StatusOptions, DiffOptions};
+use git2::{Repository, StatusOptions, DiffOptions, build::CheckoutBuilder};
 use serde::Serialize;
 use std::path::PathBuf;
 use tauri::State;
