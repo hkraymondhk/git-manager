@@ -3,51 +3,51 @@
 node_modules/
 vendor/
 
-# Build outputs
+# Build artifacts
+target/
 dist/
 build/
-target/
-release/
-debug/
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+*.exe
 
-# Rust/Cargo specific
+# Rust-specific
 Cargo.lock
-*.rs.bk
-**/deps/
-**/examples/
-**/incremental/
-
-# Tauri specific
-src-tauri/target/
-src-tauri/Cargo.lock
-
-# OS generated files
-.DS_Store
-Thumbs.db
+**/*.rs.bk
 
 # Logs
 *.log
 
-# Environment variables
+# Environment
 .env
 .env.local
 .env.*
 
-# Editor files
+# Editors
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# Coverage reports
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+**/test-results/
 coverage/
 htmlcov/
 .coverage
 
-# Python cache (if any Python files exist in the project)
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
+# Cache
+**/__pycache__/
+**/.mypy_cache/
+**/.pytest_cache/
+**/.ruff_cache/
 ```

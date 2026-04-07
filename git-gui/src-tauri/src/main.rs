@@ -29,6 +29,16 @@ fn main() {
             // Log commands
             commands::log::get_commit_log,
             commands::log::get_graph_data,
+            // Branch management commands
+            commands::branch::get_branches,
+            commands::branch::create_branch,
+            commands::branch::checkout_branch,
+            commands::branch::delete_branch,
+            commands::branch::merge_branch,
+            commands::branch::rebase_branch,
+            commands::branch::cherry_pick,
+            commands::branch::get_tags,
+            commands::branch::create_tag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
