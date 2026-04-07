@@ -1,7 +1,7 @@
 use crate::error::{AppError, Result};
 use crate::state::AppState;
 use git2::{Repository, StatusOptions, DiffOptions};
-use git2::build::CheckoutBuilder;
+
 use serde::Serialize;
 use std::path::PathBuf;
 use tauri::State;
@@ -136,45 +136,6 @@ pub async fn get_repo_status(state: State<'_, AppState>) -> Result<RepoStatus> {
     })
 }
 
-/// Stage a file
-#[tauri::command]
-pub async fn stage_file(state: State<'_, AppState>, path: String) -> Result<()> {
-    let repo_path = state.current_repo_path.lock().unwrap();
-    let repo_path = repo_path.as_ref().ok_or(AppError::NoRepository)?;
-    
-    let repo = Repository::open(repo_path)?;
-    let mut index = repo.index()?;
-    
-    let full_path = PathBuf::from(&path);
-    let relative_path = full_path.strip_prefix(repo_path).unwrap_or(&full_path);
-    
-    if full_path.exists() {
-        index.add_path(relative_path)?;
-    } else {
-        index.remove_path(relative_path)?;
-    }
-    
-    index.write()?;
-    Ok(())
-}
-
-/// Unstage a file
-#[tauri::command]
-pub async fn unstage_file(state: State<'_, AppState>, path: String) -> Result<()> {
-    let repo_path = state.current_repo_path.lock().unwrap();
-    let repo_path = repo_path.as_ref().ok_or(AppError::NoRepository)?;
-    
-    let repo = Repository::open(repo_path)?;
-    let mut index = repo.index()?;
-    
-    let full_path = PathBuf::from(&path);
-    let relative_path = full_path.strip_prefix(repo_path).unwrap_or(&full_path);
-    
-    index.remove_path(relative_path)?;
-    index.write()?;
-    
-    Ok(())
-}
 
 /// Create a commit
 #[tauri::command]
@@ -276,21 +237,3 @@ pub async fn get_diff(state: State<'_, AppState>, path: String) -> Result<String
     Ok(diff_text)
 }
 
-/// Discard changes in a file
-#[tauri::command]
-pub async fn discard_changes(state: State<'_, AppState>, path: String) -> Result<()> {
-    let repo_path = state.current_repo_path.lock().unwrap();
-    let repo_path = repo_path.as_ref().ok_or(AppError::NoRepository)?;
-    
-    let repo = Repository::open(repo_path)?;
-    let full_path = PathBuf::from(&path);
-    let relative_path = full_path.strip_prefix(repo_path).unwrap_or(&full_path);
-    
-    // Use checkout_head with path to restore a single file
-    let mut checkout_opts = CheckoutBuilder::new();
-    checkout_opts.force();
-    checkout_opts.path(relative_path);
-    
-    repo.checkout_head(Some(&mut checkout_opts))?;
-    Ok(())
-}

@@ -36,22 +36,24 @@ pub struct WorkingStatus {
 
 /// 將 git2 的 delta 狀態轉換為 StatusType
 fn delta_to_status_type(status: u32) -> StatusType {
-    let flags = git2::StatusFlags::from_bits_truncate(status);
+    use git2::StatusExt;
+    
+    let status = git2::Status::from_bits_truncate(status);
 
-    if flags.contains(git2::StatusFlags::CONFLICTED) {
+    if status.is_conflicted() {
         StatusType::Conflicted
-    } else if flags.contains(git2::StatusFlags::INDEX_RENAMED) {
+    } else if status.is_index_renamed() {
         StatusType::Renamed
-    } else if flags.contains(git2::StatusFlags::INDEX_TYPECHANGE)
-        || flags.contains(git2::StatusFlags::WT_TYPECHANGE)
+    } else if status.is_index_typechange()
+        || status.is_wt_typechange()
     {
         StatusType::TypeChange
-    } else if flags.contains(git2::StatusFlags::INDEX_DELETED)
-        || flags.contains(git2::StatusFlags::WT_DELETED)
+    } else if status.is_index_deleted()
+        || status.is_wt_deleted()
     {
         StatusType::Deleted
-    } else if flags.contains(git2::StatusFlags::INDEX_NEW)
-        || flags.contains(git2::StatusFlags::WT_NEW)
+    } else if status.is_index_new()
+        || status.is_wt_new()
     {
         StatusType::Added
     } else {
@@ -109,7 +111,7 @@ pub async fn get_working_status(state: State<'_, AppState>) -> Result<WorkingSta
             .map(|p| normalize_path(&p));
 
         // 檢查是否為未追蹤文件
-        if status.contains(git2::StatusFlags::WT_NEW) {
+        if status.is_wt_new() {
             untracked.push(FileStatus {
                 path: path.clone(),
                 old_path: None,
@@ -120,19 +122,19 @@ pub async fn get_working_status(state: State<'_, AppState>) -> Result<WorkingSta
 
         // 檢查是否在 index 中（已暫存）
         let is_staged = status.intersects(
-            git2::StatusFlags::INDEX_NEW
-                | git2::StatusFlags::INDEX_MODIFIED
-                | git2::StatusFlags::INDEX_DELETED
-                | git2::StatusFlags::INDEX_RENAMED
-                | git2::StatusFlags::INDEX_TYPECHANGE,
+            git2::Status::INDEX_NEW
+                | git2::Status::INDEX_MODIFIED
+                | git2::Status::INDEX_DELETED
+                | git2::Status::INDEX_RENAMED
+                | git2::Status::INDEX_TYPECHANGE,
         );
 
         // 檢查是否有工作區改動
         let has_workdir_changes = status.intersects(
-            git2::StatusFlags::WT_MODIFIED
-                | git2::StatusFlags::WT_DELETED
-                | git2::StatusFlags::WT_RENAMED
-                | git2::StatusFlags::WT_TYPECHANGE,
+            git2::Status::WT_MODIFIED
+                | git2::Status::WT_DELETED
+                | git2::Status::WT_RENAMED
+                | git2::Status::WT_TYPECHANGE,
         );
 
         let status_type = delta_to_status_type(status.bits());
@@ -145,7 +147,7 @@ pub async fn get_working_status(state: State<'_, AppState>) -> Result<WorkingSta
             });
         }
 
-        if has_workdir_changes || status.contains(git2::StatusFlags::WT_MODIFIED) {
+        if has_workdir_changes || status.is_wt_modified() {
             unstaged.push(FileStatus {
                 path,
                 old_path,
@@ -202,7 +204,8 @@ pub async fn unstage_file(path: String, state: State<'_, AppState>) -> Result<()
 
     // 使用 reset 將文件從 index 移回工作區
     let (object, _) = repo.revparse_ext("HEAD")?;
-    repo.reset_default(Some(&object), Some(&[repo_relative_path.as_os_str().to_str().unwrap()]))?;
+    let path_str = repo_relative_path.as_os_str().to_str().unwrap();
+    repo.reset_default(Some(&object), Some(&path_str))?;
 
     Ok(())
 }
@@ -276,7 +279,7 @@ pub async fn setup_file_watcher(
         .clone()
         .ok_or_else(|| AppError::NotInitialized("No repository opened".to_string()))?;
 
-    let (tx, rx) = channel();
+    let (tx, rx) = channel::<notify::Result<notify::Event>>();
 
     // 創建 watcher
     let mut watcher = RecommendedWatcher::new(
