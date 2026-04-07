@@ -359,10 +359,11 @@ pub fn merge_branch(state: State<AppState>, name: String) -> Result<MergeResult>
         while let Some(conflict_result) = conflict_iter.next() {
             let conflict = conflict_result?;
             if let Some(entry) = conflict.our {
-                let path_bytes: &[u8] = entry.path.as_ref().map(|p| p.as_slice()).unwrap_or(&[]);
-                if !path_bytes.is_empty() {
-                    if let Ok(path_str) = std::str::from_utf8(path_bytes) {
-                        conflicts.push(path_str.to_string());
+                if let Some(path_bytes) = &entry.path {
+                    if !path_bytes.is_empty() {
+                        if let Ok(path_str) = std::str::from_utf8(path_bytes) {
+                            conflicts.push(path_str.to_string());
+                        }
                     }
                 }
             }
