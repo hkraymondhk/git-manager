@@ -36,25 +36,32 @@ pub struct WorkingStatus {
 
 /// 將 git2 的 delta 狀態轉換為 StatusType
 fn delta_to_status_type(status: u32) -> StatusType {
-    let status = git2::Status::from_bits_truncate(status);
-
-    if <git2::Status as git2::StatusExt>::is_conflicted(&status) {
+    use git2::Status;
+    
+    let s = Status::from_bits_truncate(status);
+    
+    // 檢查衝突
+    if s.intersects(Status::CONFLICTED) {
         StatusType::Conflicted
-    } else if <git2::Status as git2::StatusExt>::is_index_renamed(&status) {
+    }
+    // 檢查重命名（index 或 workdir）
+    else if s.intersects(Status::INDEX_RENAMED | Status::WT_RENAMED) {
         StatusType::Renamed
-    } else if <git2::Status as git2::StatusExt>::is_index_typechange(&status)
-        || <git2::Status as git2::StatusExt>::is_wt_typechange(&status)
-    {
+    }
+    // 檢查類型變更
+    else if s.intersects(Status::INDEX_TYPECHANGE | Status::WT_TYPECHANGE) {
         StatusType::TypeChange
-    } else if <git2::Status as git2::StatusExt>::is_index_deleted(&status)
-        || <git2::Status as git2::StatusExt>::is_wt_deleted(&status)
-    {
+    }
+    // 檢查刪除
+    else if s.intersects(Status::INDEX_DELETED | Status::WT_DELETED) {
         StatusType::Deleted
-    } else if <git2::Status as git2::StatusExt>::is_index_new(&status)
-        || <git2::Status as git2::StatusExt>::is_wt_new(&status)
-    {
+    }
+    // 檢查新增
+    else if s.intersects(Status::INDEX_NEW | Status::WT_NEW) {
         StatusType::Added
-    } else {
+    }
+    // 其他情況視為修改
+    else {
         StatusType::Modified
     }
 }
@@ -109,7 +116,7 @@ pub async fn get_working_status(state: State<'_, AppState>) -> Result<WorkingSta
             .map(|p| normalize_path(&p));
 
         // 檢查是否為未追蹤文件
-        if <git2::Status as git2::StatusExt>::is_wt_new(&status) {
+        if status.intersects(git2::Status::WT_NEW) {
             untracked.push(FileStatus {
                 path: path.clone(),
                 old_path: None,
@@ -145,7 +152,7 @@ pub async fn get_working_status(state: State<'_, AppState>) -> Result<WorkingSta
             });
         }
 
-        if has_workdir_changes || <git2::Status as git2::StatusExt>::is_wt_modified(&status) {
+        if has_workdir_changes || status.intersects(git2::Status::WT_MODIFIED) {
             unstaged.push(FileStatus {
                 path,
                 old_path,
