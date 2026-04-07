@@ -98,7 +98,7 @@ export function ChangesPanel() {
               color: isSelected ? '#fff' : '#24292f',
             }}>{node.name}</span>
           </div>
-          {isExpanded && node.children?.map(child => renderNode(child, depth + 1))}
+          {isExpanded && node.children && node.children.map(child => renderNode(child, depth + 1))}
         </div>
       );
     } else {
