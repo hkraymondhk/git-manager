@@ -85,7 +85,10 @@ export function ChangesPanel() {
               paddingLeft: `${depth * 16 + 8}px`,
               backgroundColor: isSelected ? '#0969da' : 'transparent',
             }}
-            onClick={() => toggleDir(node.path)}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleDir(node.path);
+            }}
           >
             {isExpanded ? (
               <ChevronDown size={16} style={styles.icon} />
