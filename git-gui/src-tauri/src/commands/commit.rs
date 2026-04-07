@@ -60,14 +60,14 @@ pub fn create_commit(state: tauri::State<AppState>, message: String, amend: bool
         let parent_commit = repo.find_commit(head.target().unwrap())
             .map_err(|e| format!("Failed to find parent commit: {}", e))?;
 
-        // 使用 amend 方法 - 注意參數順序：header, author, committer, message_encoding, update_ref, tree, message
+        // 使用 amend 方法 - 注意參數順序：update_ref, author, committer, message_encoding, tree, message
         let new_oid = parent_commit.amend(
             Some("HEAD"),           // update_ref
             Some(&signature),       // author
             Some(&signature),       // committer
             None,                   // message_encoding
-            &message,               // message
             Some(&tree),            // tree
+            &message,               // message
         ).map_err(|e| format!("Failed to amend commit: {}", e))?;
 
         new_oid

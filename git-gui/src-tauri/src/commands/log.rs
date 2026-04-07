@@ -105,8 +105,8 @@ pub fn get_commit_log(state: tauri::State<AppState>, options: LogOptions) -> Res
             
             let search_lower = search_term.to_lowercase();
             if !message.to_lowercase().contains(&search_lower)
-                && !author_name.to_lowercase().contains(&search_lower)
-                && !author_email.to_lowercase().contains(&search_lower)
+                && !author_name.contains(&search_lower)
+                && !author_email.contains(&search_lower)
             {
                 continue;
             }
@@ -148,15 +148,14 @@ pub fn get_graph_data(state: tauri::State<AppState>, limit: usize) -> Result<Gra
     {
         let (branch_ref, _branch_type) = branch.map_err(|e| format!("Failed to get branch: {}", e))?;
         let branch_name = branch_ref.name()
-            .and_then(|n| Ok(n.map(|s| s.to_string())))
-            .unwrap_or_else(|_| Ok("unknown".to_string()))?
-            .trim_start_matches("refs/heads/")
-            .to_string();
+            .unwrap_or(None)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "unknown".to_string());
         
         if let Some(target) = branch_ref.get().target() {
             branches_map.entry(target.to_string())
                 .or_insert_with(Vec::new)
-                .push(branch_name);
+                .push(branch_name.trim_start_matches("refs/heads/").to_string());
         }
     }
 

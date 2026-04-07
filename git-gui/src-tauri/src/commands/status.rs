@@ -411,49 +411,6 @@ pub async fn get_repo_status(state: State<'_, AppState>) -> Result<RepoStatus, A
     })
 }
 
-/// Create a commit
-#[tauri::command]
-pub async fn create_commit(
-    state: State<'_, AppState>,
-    message: String,
-) -> Result<String, AppError> {
-    let repo_path = state
-        .current_repo_path
-        .lock()
-        .map_err(|_| AppError::StateLockError("Failed to lock repo_path".to_string()))?
-        .clone()
-        .ok_or_else(|| AppError::NotInitialized("No repository opened".to_string()))?;
-
-    let repo = Repository::open(&repo_path)?;
-    let mut index = repo.index()?;
-
-    if index.is_empty() {
-        return Err(AppError::Git(git2::Error::from_str("Nothing to commit")));
-    }
-
-    let tree_id = index.write_tree()?;
-    let tree = repo.find_tree(tree_id)?;
-
-    let signature = repo.signature()?;
-
-    let parents = if let Ok(head) = repo.head() {
-        vec![repo.find_commit(head.target().unwrap())?]
-    } else {
-        vec![]
-    };
-
-    let commit = repo.commit(
-        Some("HEAD"),
-        &signature,
-        &signature,
-        &message,
-        &tree,
-        &parents.iter().collect::<Vec<_>>(),
-    )?;
-
-    Ok(commit.to_string())
-}
-
 /// Get diff for a file
 #[tauri::command]
 pub async fn get_diff(state: State<'_, AppState>, path: String) -> Result<String, AppError> {
