@@ -1,0 +1,235 @@
+use git2::{Repository, Signature};
+use std::path::PathBuf;
+use crate::AppState;
+use crate::commands::status::{FileStatus, StatusType};
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CommitSummary {
+    pub oid: String,
+    pub message: String,
+    pub author: AuthorInfo,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AuthorInfo {
+    pub name: String,
+    pub email: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CommitDetail {
+    pub oid: String,
+    pub message: String,
+    pub author: AuthorInfo,
+    pub committer: AuthorInfo,
+    pub parents: Vec<String>,
+    pub changed_files: Vec<FileStatus>,
+    pub timestamp: i64,
+}
+
+#[tauri::command]
+pub fn create_commit(state: tauri::State<AppState>, message: String, amend: bool) -> Result<CommitSummary, String> {
+    let repo_path = state.repo_path.lock().map_err(|e| e.to_string())?;
+    let repo_path_buf = PathBuf::from(repo_path.clone());
+    
+    let repo = Repository::open(&repo_path_buf)
+        .map_err(|e| format!("Failed to open repository: {}", e))?;
+
+    // 獲取簽名 (user.name, user.email)
+    let signature = get_signature(&repo)?;
+
+    // 準備索引
+    let mut index = repo.index()
+        .map_err(|e| format!("Failed to get index: {}", e))?;
+    
+    index.write()
+        .map_err(|e| format!("Failed to write index: {}", e))?;
+
+    let tree_id = index.write_tree()
+        .map_err(|e| format!("Failed to write tree: {}", e))?;
+    
+    let tree = repo.find_tree(tree_id)
+        .map_err(|e| format!("Failed to find tree: {}", e))?;
+
+    let oid = if amend {
+        // Amend 模式：修改最後一個提交
+        let head = repo.head()
+            .map_err(|e| format!("Failed to get HEAD: {}", e))?;
+        
+        let parent_commit = repo.find_commit(head.target().unwrap())
+            .map_err(|e| format!("Failed to find parent commit: {}", e))?;
+
+        // 使用 amend 方法
+        let new_oid = parent_commit.amend(
+            Some("HEAD"),
+            Some(&signature),
+            Some(&signature),
+            None, // 保持原訊息或稍後設定
+            Some(&tree),
+            Some(&message), // 新訊息
+        ).map_err(|e| format!("Failed to amend commit: {}", e))?;
+
+        new_oid
+    } else {
+        // 普通提交
+        let mut parents = vec![];
+        
+        if let Ok(head) = repo.head() {
+            if let Some(target) = head.target() {
+                let parent = repo.find_commit(target)
+                    .map_err(|e| format!("Failed to find parent: {}", e))?;
+                parents.push(&parent);
+            }
+        }
+
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            &message,
+            &tree,
+            &parents.iter().collect::<Vec<_>>(),
+        ).map_err(|e| format!("Failed to create commit: {}", e))?
+    };
+
+    // 如果有暫存的更改，提交後重置索引以反映新的 HEAD
+    // 這一步是可選的，取決於你想要的行為
+    // 這裡我們執行一個軟重置來確保工作目錄和索引與新提交一致
+    // 但通常不需要，因為我們已經寫入了樹
+    
+    let commit = repo.find_commit(oid)
+        .map_err(|e| format!("Failed to find new commit: {}", e))?;
+
+    Ok(CommitSummary {
+        oid: oid.to_string(),
+        message: commit.message().unwrap_or("").to_string(),
+        author: AuthorInfo {
+            name: signature.name().unwrap_or("").to_string(),
+            email: signature.email().unwrap_or("").to_string(),
+        },
+        timestamp: commit.time().seconds(),
+    })
+}
+
+fn get_signature(repo: &Repository) -> Result<Signature, String> {
+    // 嘗試從 config 獲取
+    let config = repo.config()
+        .map_err(|e| format!("Failed to get config: {}", e))?;
+    
+    let name = config.get_string("user.name")
+        .or_else(|_| Ok("Unknown".to_string()))?;
+    
+    let email = config.get_string("user.email")
+        .or_else(|_| Ok("unknown@example.com".to_string()))?;
+
+    Signature::now(&name, &email)
+        .map_err(|e| format!("Failed to create signature: {}", e))
+}
+
+#[tauri::command]
+pub fn get_commit_detail(state: tauri::State<AppState>, oid: String) -> Result<CommitDetail, String> {
+    let repo_path = state.repo_path.lock().map_err(|e| e.to_string())?;
+    let repo_path_buf = PathBuf::from(repo_path.clone());
+    
+    let repo = Repository::open(&repo_path_buf)
+        .map_err(|e| format!("Failed to open repository: {}", e))?;
+
+    let commit_oid = git2::Oid::from_str(&oid)
+        .map_err(|e| format!("Invalid OID: {}", e))?;
+
+    let commit = repo.find_commit(commit_oid)
+        .map_err(|e| format!("Commit not found: {}", e))?;
+
+    // 獲取作者
+    let author = commit.author();
+    let author_info = AuthorInfo {
+        name: author.name().unwrap_or("").to_string(),
+        email: author.email().unwrap_or("").to_string(),
+    };
+
+    // 獲取提交者
+    let committer = commit.committer();
+    let committer_info = AuthorInfo {
+        name: committer.name().unwrap_or("").to_string(),
+        email: committer.email().unwrap_or("").to_string(),
+    };
+
+    // 獲取父提交
+    let parents: Vec<String> = commit.parents()
+        .filter_map(|p| Some(p.id().to_string()))
+        .collect();
+
+    // 獲取變更的文件
+    let mut changed_files = Vec::new();
+    
+    if commit.parent_count() > 0 {
+        let parent = commit.parent(0)
+            .map_err(|e| format!("Failed to get parent: {}", e))?;
+        
+        let parent_tree = parent.tree()
+            .map_err(|e| format!("Failed to get parent tree: {}", e))?;
+        
+        let current_tree = commit.tree()
+            .map_err(|e| format!("Failed to get current tree: {}", e))?;
+
+        let mut opts = git2::DiffOptions::new();
+        opts.include_untracked(true);
+        
+        let diff = repo.diff_tree_to_tree(
+            Some(&parent_tree),
+            Some(&current_tree),
+            Some(&mut opts),
+        ).map_err(|e| format!("Failed to create diff: {}", e))?;
+
+        diff.foreach(
+            &mut |delta, _hunks| {
+                let file = delta.new_file();
+                let path = file.path().map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
+                
+                let status_type = match file.status() {
+                    git2::Delta::Added => StatusType::Added,
+                    git2::Delta::Deleted => StatusType::Deleted,
+                    git2::Delta::Modified => StatusType::Modified,
+                    git2::Delta::Renamed => StatusType::Renamed,
+                    git2::Delta::Typechange => StatusType::Modified,
+                    _ => StatusType::Modified,
+                };
+
+                changed_files.push(FileStatus {
+                    path,
+                    old_path: None,
+                    status_type,
+                });
+                true
+            },
+            None,
+            None,
+            None,
+        ).map_err(|e| format!("Failed to process diff: {}", e))?;
+    } else {
+        // 初始提交，所有文件都是新增的
+        let tree = commit.tree()
+            .map_err(|e| format!("Failed to get tree: {}", e))?;
+        
+        tree.walk(git2::TreeWalkMode::PreOrder, |_, entry| {
+            changed_files.push(FileStatus {
+                path: entry.name().unwrap_or("unknown").to_string(),
+                old_path: None,
+                status_type: StatusType::Added,
+            });
+            git2::TreeWalkResult::Ok
+        }).map_err(|e| format!("Failed to walk tree: {}", e))?;
+    }
+
+    Ok(CommitDetail {
+        oid: commit.id().to_string(),
+        message: commit.message().unwrap_or("").to_string(),
+        author: author_info,
+        committer: committer_info,
+        parents,
+        changed_files,
+        timestamp: commit.time().seconds(),
+    })
+}

@@ -3,3 +3,5 @@
 
 pub mod repo;
 pub mod status;
+pub mod commit;
+pub mod log;
