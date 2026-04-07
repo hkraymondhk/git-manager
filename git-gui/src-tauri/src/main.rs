@@ -4,8 +4,6 @@ pub mod commands;
 pub mod error;
 pub mod state;
 
-use tauri::Manager;
-
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())

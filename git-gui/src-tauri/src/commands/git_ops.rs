@@ -123,7 +123,7 @@ pub async fn get_repo_status(state: State<'_, AppState>) -> Result<RepoStatus> {
         files.push(FileStatus {
             path,
             status: status.to_string(),
-            staged: entry.status().is_index(),
+            staged: entry.status().is_index_new() || entry.status().is_index_modified() || entry.status().is_index_deleted(),
         });
     }
     
@@ -188,7 +188,7 @@ pub async fn create_commit(
     let mut index = repo.index()?;
     
     if index.is_empty() {
-        return Err(AppError::GitError(git2::Error::from_str("Nothing to commit")));
+        return Err(AppError::Git(git2::Error::from_str("Nothing to commit")));
     }
     
     let tree_id = index.write_tree()?;
@@ -285,6 +285,11 @@ pub async fn discard_changes(state: State<'_, AppState>, path: String) -> Result
     let full_path = PathBuf::from(&path);
     let relative_path = full_path.strip_prefix(repo_path).unwrap_or(&full_path);
     
-    repo.checkout_path(relative_path, None)?;
+    // Use checkout_head with pathspec to restore a single file
+    let mut checkout_opts = git2::CheckoutBuilder::new();
+    checkout_opts.force();
+    checkout_opts.pathspec(relative_path);
+    
+    repo.checkout_head(Some(&mut checkout_opts))?;
     Ok(())
 }
